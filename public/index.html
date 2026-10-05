@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#16203c">
+<title>polyTRACK</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div id="app">
+
+  <section id="screen-menu" class="screen active">
+    <div class="menu-card">
+      <h1>poly<span>TRACK</span></h1>
+      <p class="tag">draw it. race it.</p>
+      <button class="btn primary" id="m-race">Race vs AI</button>
+      <button class="btn" id="m-mp">Multiplayer (LAN)</button>
+      <button class="btn" id="m-editor">Track editor</button>
+      <button class="btn ghost" id="m-presets">Presets (<span id="m-count">0</span>)</button>
+      <p class="hint">offline: <span id="m-sw-state">…</span></p>
+    </div>
+    <div id="preset-list" class="preset-list hidden">
+      <div class="preset-head">
+        <h2>Saved presets</h2>
+        <label class="btn ghost small">Import JSON<input type="file" id="preset-import" accept="application/json,.json" hidden></label>
+      </div>
+      <div id="preset-rows"></div>
+      <button class="btn ghost small" id="preset-close">Close</button>
+    </div>
+  </section>
+
+  <section id="screen-editor" class="screen">
+    <div class="editor-wrap">
+      <div class="editor-toolbar">
+        <input id="ed-name" placeholder="Track name" maxlength="32">
+        <label class="slider">Width <input type="range" id="ed-width" min="8" max="24" value="14"><span id="ed-width-v">14</span>m</label>
+        <label class="slider">Smooth <input type="range" id="ed-smooth" min="0" max="4" value="2"><span id="ed-smooth-v">2</span></label>
+        <button class="btn ghost" id="ed-clear">Clear</button>
+        <button class="btn" id="ed-save">Save preset</button>
+        <button class="btn primary" id="ed-race">Race this track ▶</button>
+        <button class="btn ghost" id="ed-back">Back</button>
+      </div>
+      <canvas id="ed-canvas" width="900" height="600"></canvas>
+      <div id="ed-hint">Draw a loop with the mouse — then drag the dots to fine-tune. Double-click the road to add a point.</div>
+    </div>
+  </section>
+
+  <section id="screen-lobby" class="screen">
+    <div class="menu-card">
+      <h2>Multiplayer lobby</h2>
+      <input id="lobby-name" placeholder="Your name" maxlength="24" value="">
+      <p id="lobby-status">Connecting…</p>
+      <ul id="lobby-peers"></ul>
+      <label id="lobby-track-row" class="hidden">Track
+        <select id="lobby-track"></select>
+      </label>
+      <button class="btn primary" id="lobby-start" disabled>Start race</button>
+      <p class="hint" id="lobby-hint">Waiting for host to pick a track…</p>
+      <button class="btn ghost" id="lobby-leave">Leave</button>
+    </div>
+  </section>
+
+  <section id="screen-race" class="screen">
+    <canvas id="gl"></canvas>
+    <div id="hud" class="hidden">
+      <div id="hud-lap">Lap 1/3</div>
+      <canvas id="hud-minimap" width="170" height="130"></canvas>
+      <div id="hud-pos">1/4</div>
+      <div id="hud-speed">0<span>km/h</span></div>
+      <div id="hud-countdown" class="hidden">3</div>
+      <div id="hud-note"></div>
+    </div>
+  </section>
+
+  <section id="screen-results" class="screen">
+    <div class="menu-card wide">
+      <h2>Results</h2>
+      <table id="res-table"><thead><tr><th>#</th><th>Driver</th><th>Total</th><th>Best lap</th></tr></thead><tbody></tbody></table>
+      <button class="btn primary" id="res-restart">Race again</button>
+      <button class="btn ghost" id="res-menu">Back to menu</button>
+    </div>
+  </section>
+
+</div>
+<div id="toast" class="hidden"></div>
+<div id="nogl" class="overlay hidden">
+  <div class="menu-card"><h2>WebGL unavailable</h2><p>Your browser can't run the 3D renderer. Try an up-to-date Chrome, Edge or Firefox.</p></div>
+</div>
+<script type="module" src="/js/main.js"></script>
+</body>
+</html>
