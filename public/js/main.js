@@ -1,4 +1,5 @@
 import { createPresetStore, makePreset } from "./presets.js";
+import { LIBRARY } from "./library.js";
 import { initEditor } from "./editor.js";
 import { startRace, stopRace } from "./race.js";
 
@@ -55,39 +56,54 @@ function exportPreset(p) {
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 }
 
-function renderPresets() {
-  const list = store.list();
-  $("m-count").textContent = String(list.length);
-  const rows = $("preset-rows");
-  rows.innerHTML = "";
-  for (const p of list) {
-    const row = document.createElement("div");
-    row.className = "preset-row";
-    const nm = document.createElement("span");
-    nm.className = "nm";
-    nm.textContent = p.name;
-    const meta = document.createElement("span");
-    meta.className = "meta";
-    meta.textContent = `${p.points.length} pts · ${p.width}m`;
-    row.append(nm, meta);
-    const mk = (label, cls, fn) => {
-      const b = document.createElement("button");
-      b.className = `btn small ${cls}`.trim();
-      b.textContent = label;
-      b.addEventListener("click", fn);
-      return b;
-    };
+function presetRow(p, official) {
+  const row = document.createElement("div");
+  row.className = "preset-row";
+  if (official) {
+    const badge = document.createElement("span");
+    badge.className = `badge ${p.theme}`;
+    badge.textContent = p.theme;
+    row.appendChild(badge);
+  }
+  const nm = document.createElement("span");
+  nm.className = "nm";
+  nm.textContent = p.name;
+  const meta = document.createElement("span");
+  meta.className = "meta";
+  meta.textContent = official
+    ? `${p.points.length} pts · ${p.width}m · ${"★".repeat(p.difficulty)}${"☆".repeat(5 - p.difficulty)}`
+    : `${p.points.length} pts · ${p.width}m`;
+  row.append(nm, meta);
+  const mk = (label, cls, fn) => {
+    const b = document.createElement("button");
+    b.className = `btn small ${cls}`.trim();
+    b.textContent = label;
+    b.addEventListener("click", fn);
+    return b;
+  };
+  row.append(
+    mk("Race", "primary", () => {
+      stash(p, "ai");
+      location.hash = "#race";
+    }),
+    mk("Edit", "", () => {
+      let target = p;
+      if (official) {
+        const cp = makePreset(`${p.name} (copy)`, p.points, p.width, p.smoothing, {
+          theme: p.theme,
+          elev: { ...p.elev },
+        });
+        store.save(cp);
+        document.dispatchEvent(new CustomEvent("polytrack:presets-changed"));
+        target = cp;
+      }
+      editor.load(target);
+      location.hash = "#editor";
+    }),
+    mk("Export", "ghost", () => exportPreset(p))
+  );
+  if (!official) {
     row.append(
-      mk("Race", "primary", () => {
-        stash(p, "ai");
-        location.hash = "#race";
-      }),
-      mk("Edit", "", () => {
-        stash(p, "ai");
-        editor.load(p);
-        location.hash = "#editor";
-      }),
-      mk("Export", "ghost", () => exportPreset(p)),
       mk("Delete", "ghost", () => {
         if (confirm(`Delete "${p.name}"?`)) {
           store.remove(p.id);
@@ -95,8 +111,19 @@ function renderPresets() {
         }
       })
     );
-    rows.appendChild(row);
   }
+  return row;
+}
+
+function renderPresets() {
+  const list = store.list();
+  $("m-count").textContent = String(list.length);
+  const officialRows = $("official-rows");
+  const rows = $("preset-rows");
+  officialRows.innerHTML = "";
+  rows.innerHTML = "";
+  for (const p of LIBRARY) officialRows.appendChild(presetRow(p, true));
+  for (const p of list) rows.appendChild(presetRow(p, false));
 }
 
 const editor = initEditor({
@@ -110,11 +137,6 @@ const editor = initEditor({
 document.addEventListener("polytrack:presets-changed", renderPresets);
 
 $("m-race").addEventListener("click", () => {
-  if (!store.list().length) {
-    toast("Draw a track first");
-    location.hash = "#editor";
-    return;
-  }
   location.hash = "#presets";
 });
 $("m-editor").addEventListener("click", () => (location.hash = "#editor"));

@@ -1,3 +1,5 @@
+import { LIBRARY } from "./library.js";
+
 let ws = null;
 let myId = null;
 let isHost = false;
@@ -49,6 +51,9 @@ export function openLobby({ store }) {
   const startBtn = $("lobby-start");
   const hintEl = $("lobby-hint");
 
+  const resolvePreset = (id) =>
+    store.get(id) || LIBRARY.find((q) => q.id === id) || null;
+
   window.__mp = state;
   if (!nameEl.value) nameEl.value = sessionStorage.getItem("polytrack.myname") || "Player";
 
@@ -72,20 +77,31 @@ export function openLobby({ store }) {
   const fillTracks = () => {
     const list = store.list();
     trackSel.innerHTML = "";
-    for (const p of list) {
-      const opt = document.createElement("option");
-      opt.value = p.id;
-      opt.textContent = p.name;
-      trackSel.appendChild(opt);
+    const mkGroup = (label, presets) => {
+      if (!presets.length) return;
+      const g = document.createElement("optgroup");
+      g.label = label;
+      for (const p of presets) {
+        const opt = document.createElement("option");
+        opt.value = p.id;
+        opt.textContent = p.name;
+        g.appendChild(opt);
+      }
+      trackSel.appendChild(g);
+    };
+    mkGroup("Official", LIBRARY);
+    mkGroup("Your tracks", list);
+    if (!currentPreset) {
+      currentPreset = LIBRARY[0] || list[0] || null;
+      if (currentPreset) trackSel.value = currentPreset.id;
     }
     if (isHost) {
       trackRow.classList.toggle("hidden", false);
-      if (!list.length) {
-        hintEl.textContent = "No presets yet — draw one in the editor first.";
+      if (!currentPreset) {
+        hintEl.textContent = "No tracks available - draw one in the editor first.";
         startBtn.disabled = true;
-      } else if (!currentPreset) {
-        hintEl.textContent = "Pick a track, then start the race.";
-        startBtn.disabled = true;
+      } else {
+        hintEl.textContent = `Track "${currentPreset.name}" - press Start when ready.`;
       }
     }
   };
@@ -99,7 +115,7 @@ export function openLobby({ store }) {
 
     trackSel.addEventListener("change", () => {
       if (!isHost) return;
-      currentPreset = store.get(trackSel.value);
+      currentPreset = resolvePreset(trackSel.value);
       if (currentPreset) {
         send({ t: "track", preset: currentPreset });
         hintEl.textContent = `Track "${currentPreset.name}" sent — press Start when ready.`;

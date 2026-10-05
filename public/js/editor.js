@@ -9,6 +9,9 @@ export function initEditor({ onRace, store }) {
   const widthV = document.getElementById("ed-width-v");
   const smoothEl = document.getElementById("ed-smooth");
   const smoothV = document.getElementById("ed-smooth-v");
+  const themeEl = document.getElementById("ed-theme");
+  const hillsEl = document.getElementById("ed-hills");
+  const hillsV = document.getElementById("ed-hills-v");
   const hint = document.getElementById("ed-hint");
 
   let raw = []; // control points [[x,y],...] authoritative
@@ -16,6 +19,7 @@ export function initEditor({ onRace, store }) {
   let dragging = false;
   let capture = null; // array while drawing
   let captureLen = 0;
+  let elevSeed = Math.floor(Math.random() * 0x7fffffff); // stable per track edit
 
   const toast = (m) => (window.toast ? window.toast(m) : console.warn(m));
 
@@ -125,6 +129,7 @@ export function initEditor({ onRace, store }) {
 
   widthEl.addEventListener("input", () => (widthV.textContent = widthEl.value));
   smoothEl.addEventListener("input", () => (smoothV.textContent = smoothEl.value));
+  hillsEl.addEventListener("input", () => (hillsV.textContent = hillsEl.value));
 
   document.getElementById("ed-clear").addEventListener("click", () => {
     if (raw.length && !confirm("Clear this track?")) return;
@@ -138,7 +143,11 @@ export function initEditor({ onRace, store }) {
       nameEl.value.trim() || "Untitled",
       raw,
       Number(widthEl.value),
-      Number(smoothEl.value)
+      Number(smoothEl.value),
+      {
+        theme: themeEl.value,
+        elev: { amp: Number(hillsEl.value), seed: elevSeed },
+      }
     );
   }
 
@@ -249,6 +258,14 @@ export function initEditor({ onRace, store }) {
       widthV.textContent = widthEl.value;
       smoothEl.value = String(preset.smoothing ?? 2);
       smoothV.textContent = smoothEl.value;
+      themeEl.value = ["summer", "winter", "desert"].includes(preset.theme)
+        ? preset.theme
+        : "summer";
+      hillsEl.value = String(Math.min(30, Math.max(0, preset.elev?.amp ?? 0)));
+      hillsV.textContent = hillsEl.value;
+      elevSeed = Number.isFinite(preset.elev?.seed)
+        ? preset.elev.seed
+        : Math.floor(Math.random() * 0x7fffffff);
       if (raw.length) hint.textContent = "Loaded preset — drag dots to edit.";
     },
   };
