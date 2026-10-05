@@ -115,6 +115,17 @@ export function nearestIndex(spline, x, z, hint = -1, window = 60) {
   return best;
 }
 
+// Unit left normal of the centerline at sample i (left of travel = positive lat).
+export function normalAt(spline, i) {
+  const n = spline.pts.length;
+  const prev = spline.pts[(i - 1 + n) % n];
+  const next = spline.pts[(i + 1) % n];
+  let dx = next[0] - prev[0];
+  let dz = next[1] - prev[1];
+  const len = Math.hypot(dx, dz) || 1;
+  return [dz / len, -dx / len];
+}
+
 // Signed lateral offset (left of travel = positive), tangent heading, arc position.
 export function progressAt(spline, x, z, hint = -1) {
   const i = nearestIndex(spline, x, z, hint);
