@@ -1,6 +1,23 @@
 // Preset storage — injectable storage backend so tests can run in Node.
 const KEY = "polytrack.presets";
 
+export const THEMES = ["summer", "winter", "desert"];
+
+function validElev(e) {
+  return (
+    !!e &&
+    typeof e === "object" &&
+    Number.isFinite(e.amp) &&
+    e.amp >= 0 &&
+    e.amp <= 40 &&
+    Number.isFinite(e.seed)
+  );
+}
+
+function randomSeed() {
+  return Math.floor(Math.random() * 0x7fffffff);
+}
+
 export function validatePreset(p) {
   if (!p || typeof p !== "object") return "not an object";
   if (!Array.isArray(p.points) || p.points.length < 4) return "needs at least 4 points";
@@ -23,10 +40,16 @@ export function validatePreset(p) {
   ) {
     return "smoothing must be 0..4";
   }
+  if (p.theme !== undefined && !THEMES.includes(p.theme)) {
+    return "theme must be summer|winter|desert";
+  }
+  if (p.elev !== undefined && !validElev(p.elev)) {
+    return "elev must be {amp: 0..40, seed: finite}";
+  }
   return true;
 }
 
-export function makePreset(name, points, width, smoothing) {
+export function makePreset(name, points, width, smoothing, opts = {}) {
   const id =
     typeof crypto !== "undefined" && crypto.randomUUID
       ? crypto.randomUUID()
@@ -37,7 +60,20 @@ export function makePreset(name, points, width, smoothing) {
     points: points.map(([x, y]) => [x, y]),
     width: Math.min(24, Math.max(8, Number(width) || 14)),
     smoothing: Math.min(4, Math.max(0, Math.round(Number(smoothing) || 0))),
+    theme: THEMES.includes(opts.theme) ? opts.theme : "summer",
+    elev: validElev(opts.elev)
+      ? { amp: opts.elev.amp, seed: opts.elev.seed }
+      : { amp: 0, seed: randomSeed() },
     createdAt: Date.now(),
+  };
+}
+
+// Consumption-site defaulting: old v1 presets (or malformed fields) still work.
+export function normalizePreset(p) {
+  return {
+    ...p,
+    theme: THEMES.includes(p.theme) ? p.theme : "summer",
+    elev: validElev(p.elev) ? { amp: p.elev.amp, seed: p.elev.seed } : { amp: 0, seed: 0 },
   };
 }
 
@@ -96,6 +132,8 @@ export function createPresetStore(storage) {
           points: p.points.map(([x, y]) => [x, y]),
           width: Math.min(24, Math.max(8, p.width ?? 14)),
           smoothing: Math.min(4, Math.max(0, p.smoothing ?? 0)),
+          theme: THEMES.includes(p.theme) ? p.theme : "summer",
+          elev: p.elev ? { amp: p.elev.amp, seed: p.elev.seed } : { amp: 0, seed: 0 },
           createdAt: p.createdAt || Date.now(),
         };
         const i = arr.findIndex((q) => q.id === preset.id);
