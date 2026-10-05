@@ -1,4 +1,4 @@
-import { progressAt, normalAt } from "./track.js";
+import { progressAt, normalAt, gradeAt, heightAt, fracAt } from "./track.js";
 
 export const CAR_PARAMS = {
   maxSpeed: 38,
@@ -10,14 +10,30 @@ export const CAR_PARAMS = {
   offroadFactor: 0.45,
   hardBound: 6,
   reverseMax: 12,
+  gradeK: 9,
+  airGravity: 18,
+  landSpeedScale: 0.96,
 };
 
 export function createCarState(x, z, heading) {
-  return { x, z, heading, v: 0, steer: 0, offTrack: false, hint: -1 };
+  return {
+    x,
+    z,
+    heading,
+    v: 0,
+    steer: 0,
+    offTrack: false,
+    hint: -1,
+    y: 0,
+    air: false,
+    vy: 0,
+    airT: 0,
+  };
 }
 
 // Arcade physics: scalar speed along heading, steering scaled by speed,
-// off-track speed cap + drag, soft hard-bound that pulls the car back.
+// off-track speed cap + drag, soft hard-bound that pulls the car back,
+// grade gravity (uphill slows, downhill can overspeed), crest airtime.
 export function stepCar(s, input, dt, track, params = CAR_PARAMS) {
   const P = params;
   let prog = progressAt(track.spline, s.x, s.z, s.hint);
@@ -26,6 +42,7 @@ export function stepCar(s, input, dt, track, params = CAR_PARAMS) {
   const limit = half + P.hardBound;
   const onRoad = Math.abs(prog.lat) <= half;
   s.offTrack = !onRoad;
+  const grade = track.G ? gradeAt(track, prog.i) : 0;
 
   if (Math.abs(prog.lat) > limit) {
     const p = track.spline.pts[prog.i];
@@ -38,12 +55,15 @@ export function stepCar(s, input, dt, track, params = CAR_PARAMS) {
     s.hint = prog.i;
   }
 
-  const cap = onRoad ? P.maxSpeed : P.maxSpeed * P.offroadFactor;
+  const cap =
+    (onRoad ? P.maxSpeed : P.maxSpeed * P.offroadFactor) *
+    (!s.air && grade < -0.05 ? 1.15 : 1);
   const thr = input.throttle || 0;
   const brk = input.brake || 0;
   s.v += thr * P.accel * dt;
   if (brk > 0) s.v -= brk * P.brakeForce * Math.sign(s.v) * dt;
   s.v -= P.drag * s.v * dt * (onRoad ? 1 : 2.5);
+  if (!s.air && track.G) s.v -= P.gradeK * grade * dt;
   s.v = Math.max(-P.reverseMax, Math.min(s.v, cap));
 
   const target = input.steerIn || 0;
@@ -53,6 +73,38 @@ export function stepCar(s, input, dt, track, params = CAR_PARAMS) {
 
   s.x += Math.cos(s.heading) * s.v * dt;
   s.z += Math.sin(s.heading) * s.v * dt;
+
+  // Vertical: glue to road when grounded, integrate ballistic arc in air.
+  const pg = progressAt(track.spline, s.x, s.z, s.hint);
+  s.hint = pg.i;
+  const roadY = track.H
+    ? heightAt(track, pg.i, fracAt(track.spline, pg.i, s.x, s.z))
+    : 0;
+  const roadNow = Math.abs(pg.lat) <= half;
+  if (s.air) {
+    s.airT += dt;
+    s.y += s.vy * dt;
+    s.vy -= P.airGravity * dt;
+    if (s.y <= roadY || s.airT >= 1.5) {
+      s.y = roadY;
+      s.vy = 0;
+      s.air = false;
+      s.v *= P.landSpeedScale;
+    }
+  } else {
+    s.y = roadY;
+    if (
+      track.G &&
+      roadNow &&
+      s.v >= 16 &&
+      gradeAt(track, pg.i) >= 0.1 &&
+      gradeAt(track, pg.i, 5) <= -0.1
+    ) {
+      s.air = true;
+      s.vy = Math.min(8, Math.max(0, s.v * gradeAt(track, pg.i)));
+      s.airT = 0;
+    }
+  }
   return s;
 }
 
@@ -68,13 +120,15 @@ export function keyInput(keys) {
   };
 }
 
-// Smooth chase camera: sits 10m behind the car, looks 4m ahead of it.
+// Smooth chase camera: sits 10m behind the car, looks 4m ahead of it,
+// riding the car's height (works flat too — y defaults to 0).
 export function chaseCamera(camera, car, dt) {
   const fx = Math.cos(car.heading);
   const fz = Math.sin(car.heading);
+  const cy = car.y || 0;
   const k = 1 - Math.exp(-6 * Math.max(dt, 1e-4));
   camera.position.x += (car.x - fx * 10 - camera.position.x) * k;
-  camera.position.y += (4.8 - camera.position.y) * k;
+  camera.position.y += (cy + 4.8 - camera.position.y) * k;
   camera.position.z += (car.z - fz * 10 - camera.position.z) * k;
-  camera.lookAt(car.x + fx * 4, 1.2, car.z + fz * 4);
+  camera.lookAt(car.x + fx * 4, cy + 1.2, car.z + fz * 4);
 }

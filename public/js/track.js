@@ -230,6 +230,17 @@ export function heightAt(world, i, frac = 0) {
   return a + (b - a) * Math.min(1, Math.max(0, frac));
 }
 
+// Fraction along segment i at the projection of (x,z); 0..1.
+export function fracAt(spline, i, x, z) {
+  const n = spline.pts.length;
+  const a = spline.pts[((i % n) + n) % n];
+  const b = spline.pts[(((i + 1) % n) + n) % n];
+  const dx = b[0] - a[0];
+  const dz = b[1] - a[1];
+  const l2 = dx * dx + dz * dz || 1;
+  return Math.min(1, Math.max(0, ((x - a[0]) * dx + (z - a[1]) * dz) / l2));
+}
+
 // Slope of the segment containing sample i (or the segment metersAhead
 // further along the loop). Clamped to ±0.6 by worldFromPreset.
 export function gradeAt(world, i, metersAhead = 0) {
