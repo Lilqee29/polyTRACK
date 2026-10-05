@@ -191,6 +191,60 @@ export class LapTracker {
   }
 }
 
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// Closed-loop height profile h(u), u in [0,1]. Integer frequencies make
+// h(0) == h(1) so the loop seam is continuous. |h| <= amp.
+export function elevationProfile(elev) {
+  const amp = Number(elev?.amp) || 0;
+  const rng = mulberry32((Number(elev?.seed) | 0) >>> 0);
+  const k1 = 1 + Math.floor(rng() * 2); // 1..2
+  const k2 = 2 + Math.floor(rng() * 2); // 2..3
+  const k3 = 3 + Math.floor(rng() * 2); // 3..4
+  const p1 = rng() * Math.PI * 2;
+  const p2 = rng() * Math.PI * 2;
+  const p3 = rng() * Math.PI * 2;
+  return (u) =>
+    amp *
+    (0.65 * Math.sin(2 * Math.PI * k1 * u + p1) +
+      0.25 * Math.sin(2 * Math.PI * k2 * u + p2) +
+      0.1 * Math.sin(2 * Math.PI * k3 * u + p3));
+}
+
+// Height at sample i, lerped by frac toward the next sample.
+export function heightAt(world, i, frac = 0) {
+  const H = world.H;
+  if (!H || !H.length) return 0;
+  const n = H.length;
+  const a = H[((i % n) + n) % n];
+  const b = H[(((i + 1) % n) + n) % n];
+  return a + (b - a) * Math.min(1, Math.max(0, frac));
+}
+
+// Slope of the segment containing sample i (or the segment metersAhead
+// further along the loop). Clamped to ±0.6 by worldFromPreset.
+export function gradeAt(world, i, metersAhead = 0) {
+  const G = world.G;
+  const spline = world.spline;
+  if (!G || !G.length || !spline) return 0;
+  const n = G.length;
+  let s = spline.cum[((i % n) + n) % n] + Math.max(0, metersAhead);
+  if (spline.length > 0) s %= spline.length;
+  let idx = 0;
+  const cum = spline.cum;
+  while (idx < n - 1 && cum[idx + 1] <= s) idx++;
+  return G[idx];
+}
+
 export function worldFromPreset(preset, fieldSize = 180) {
   let pts = chaikinClosed(preset.points, preset.smoothing | 0);
   let minX = Infinity,
@@ -214,10 +268,34 @@ export function worldFromPreset(preset, fieldSize = 180) {
   const s0 = spline.pts[0];
   const s1 = spline.pts[1];
   const heading = Math.atan2(s1[1] - s0[1], s1[0] - s0[0]);
+
+  const e = preset.elev;
+  const elev =
+    e && Number.isFinite(e.amp) && e.amp >= 0 && e.amp <= 40 && Number.isFinite(e.seed)
+      ? { amp: e.amp, seed: e.seed }
+      : { amp: 0, seed: 0 };
+  const n = spline.pts.length;
+  const H = new Float64Array(n);
+  const G = new Float64Array(n);
+  if (elev.amp > 0) {
+    const h = elevationProfile(elev);
+    const L = spline.length || 1;
+    for (let i = 0; i < n; i++) H[i] = h(spline.cum[i] / L);
+  }
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    const ds = Math.hypot(spline.pts[j][0] - spline.pts[i][0], spline.pts[j][1] - spline.pts[i][1]) || 0.01;
+    const g = (H[j] - H[i]) / ds;
+    G[i] = Math.min(0.6, Math.max(-0.6, g));
+  }
+
   return {
     spline,
     pointsWorld: world,
     widthWorld,
-    start: { x: s0[0], z: s0[1], heading },
+    start: { x: s0[0], z: s0[1], heading, y: H[0] },
+    H,
+    G,
+    elev,
   };
 }

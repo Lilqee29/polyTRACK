@@ -8,6 +8,9 @@ import {
   progressAt,
   LapTracker,
   worldFromPreset,
+  elevationProfile,
+  heightAt,
+  gradeAt,
 } from "../public/js/track.js";
 
 const square = [
@@ -128,4 +131,77 @@ test("worldFromPreset fits field and clamps width", () => {
   }
   assert.ok(w.widthWorld >= 8 && w.widthWorld <= 24);
   assert.ok(Number.isFinite(w.start.heading));
+});
+
+test("elevationProfile: amp 0 is flat, seam is continuous", () => {
+  const h = elevationProfile({ amp: 0, seed: 9 });
+  for (const u of [0, 0.25, 0.5, 0.75, 0.999]) {
+    assert.ok(Math.abs(h(u)) < 1e-9, `u=${u}`);
+  }
+  const g = elevationProfile({ amp: 20, seed: 3 });
+  assert.ok(Math.abs(g(0) - g(1)) < 1e-9, "h(0) must equal h(1) for a seamless loop");
+});
+
+test("elevationProfile: deterministic per seed, varies across seeds", () => {
+  const a = elevationProfile({ amp: 20, seed: 7 });
+  const b = elevationProfile({ amp: 20, seed: 7 });
+  const c = elevationProfile({ amp: 20, seed: 8 });
+  let sameAB = true;
+  let diffAC = false;
+  for (let i = 0; i <= 20; i++) {
+    const u = i / 20;
+    if (Math.abs(a(u) - b(u)) > 1e-9) sameAB = false;
+    if (Math.abs(a(u) - c(u)) > 1e-6) diffAC = true;
+  }
+  assert.ok(sameAB, "same seed must give same profile");
+  assert.ok(diffAC, "different seeds should differ");
+  for (const u of [0, 0.1, 0.33, 0.5, 0.8, 1]) {
+    assert.ok(Math.abs(a(u)) <= 20 + 1e-9, "|h| must not exceed amp");
+  }
+});
+
+test("worldFromPreset: flat preset → zero heights and grades, start.y 0", () => {
+  const w = worldFromPreset({ points: square, width: 14, smoothing: 2 });
+  assert.ok(w.H && w.H.length === w.spline.pts.length);
+  assert.ok(w.G && w.G.length === w.spline.pts.length);
+  for (const v of w.H) assert.equal(v, 0);
+  for (const v of w.G) assert.equal(v, 0);
+  assert.equal(w.start.y, 0);
+});
+
+test("worldFromPreset: hilly → H bounded by amp, G clamped, start.y = H[0]", () => {
+  const w = worldFromPreset({
+    points: square,
+    width: 14,
+    smoothing: 2,
+    elev: { amp: 20, seed: 11 },
+  });
+  let peak = 0;
+  for (const v of w.H) peak = Math.max(peak, Math.abs(v));
+  assert.ok(peak > 2, `expected real hills, peak=${peak}`);
+  assert.ok(peak <= 20 + 1e-9, `peak must respect amp, peak=${peak}`);
+  for (const v of w.G) {
+    assert.ok(v >= -0.6 && v <= 0.6, `grade clamped, got ${v}`);
+  }
+  assert.equal(w.start.y, w.H[0]);
+});
+
+test("heightAt lerps between samples; gradeAt advances with metersAhead", () => {
+  const w = worldFromPreset({
+    points: square,
+    width: 14,
+    smoothing: 2,
+    elev: { amp: 25, seed: 5 },
+  });
+  const n = w.H.length;
+  assert.equal(heightAt(w, 3, 0), w.H[3]);
+  assert.ok(Math.abs(heightAt(w, 3, 1) - w.H[4 % n]) < 1e-9);
+  assert.equal(gradeAt(w, 0), w.G[0]);
+  // advance 5m along the centerline and compare against manual scan
+  const L = w.spline.length;
+  const target = 5 % L;
+  let idx = 0;
+  while (idx < n - 1 && w.spline.cum[idx + 1] <= target) idx++;
+  assert.equal(gradeAt(w, 0, 5), w.G[idx]);
+  assert.equal(gradeAt(w, 0, 5 + L), w.G[idx], "ahead wraps the loop");
 });
