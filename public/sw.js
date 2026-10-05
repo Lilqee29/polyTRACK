@@ -1,4 +1,4 @@
-const CACHE = "polytrack-v1";
+const CACHE = "polytrack-v2";
 const CORE = [
   "/",
   "/index.html",
@@ -10,6 +10,7 @@ const CORE = [
   "/js/main.js",
   "/js/track.js",
   "/js/presets.js",
+  "/js/library.js",
   "/js/editor.js",
   "/js/scene.js",
   "/js/car.js",
