@@ -310,6 +310,9 @@ export function createScene(canvas) {
   const wheelMat = new THREE.MeshStandardMaterial({ color: 0x14161c, roughness: 0.9 });
 
   function addCar(colorHex) {
+    // per-car clones so removeCar can dispose without breaking other cars
+    const wg = wheelGeo.clone();
+    const wm = wheelMat.clone();
     const grp = new THREE.Group();
     const body = new THREE.Mesh(
       new THREE.BoxGeometry(2, 0.7, 4.2),
@@ -330,7 +333,7 @@ export function createScene(canvas) {
       [-1.02, -1.35],
       [1.02, -1.35],
     ]) {
-      const w = new THREE.Mesh(wheelGeo, wheelMat);
+      const w = new THREE.Mesh(wg, wm);
       w.position.set(wx, 0.42, wz);
       w.castShadow = true;
       grp.add(w);
