@@ -27,7 +27,7 @@ function defaultPreset() {
       [120, 300],
     ],
     14,
-    2
+    3
   );
 }
 

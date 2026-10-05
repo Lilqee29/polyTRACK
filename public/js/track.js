@@ -273,7 +273,7 @@ export function worldFromPreset(preset, fieldSize = 180) {
   const dim = Math.max(maxX - minX, maxY - minY) || 1;
   const scale = fieldSize / dim;
   const world = pts.map(([x, y]) => [(x - cx) * scale, (y - cy) * scale]);
-  const dense = resampleEven(world, 2, true);
+  const dense = resampleEven(world, 1.25, true);
   const spline = buildSpline(dense, true, 6);
   const widthWorld = Math.min(24, Math.max(8, preset.width ?? 14));
   const s0 = spline.pts[0];

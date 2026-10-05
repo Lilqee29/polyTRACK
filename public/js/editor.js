@@ -1,4 +1,4 @@
-import { chaikinClosed } from "./track.js";
+import { chaikinClosed, resampleEven, buildSpline } from "./track.js";
 import { makePreset, validatePreset } from "./presets.js";
 
 export function initEditor({ onRace, store }) {
@@ -213,7 +213,10 @@ export function initEditor({ onRace, store }) {
         polyline(capture, "#eef2f7", 3, false);
       } else if (raw.length >= 2) {
         if (n > 0 && raw.length >= 4) {
-          polyline(chaikinClosed(raw, n), "#4ade80", 6, true);
+          const sm = chaikinClosed(raw, n);
+          const dense = resampleEven(sm, 4, true);
+          const spline = buildSpline(dense, true, 6);
+          polyline(spline.pts, "#4ade80", 6, true);
         }
         polyline(raw, "rgba(238,242,247,.45)", 2, true);
         for (let i = 0; i < raw.length; i++) {
@@ -256,7 +259,7 @@ export function initEditor({ onRace, store }) {
       nameEl.value = preset.name || "";
       widthEl.value = String(preset.width ?? 14);
       widthV.textContent = widthEl.value;
-      smoothEl.value = String(preset.smoothing ?? 2);
+      smoothEl.value = String(preset.smoothing ?? 3);
       smoothV.textContent = smoothEl.value;
       themeEl.value = ["summer", "winter", "desert"].includes(preset.theme)
         ? preset.theme

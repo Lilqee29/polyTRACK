@@ -293,7 +293,7 @@ export function createScene(canvas) {
     const curbGeo = new THREE.BoxGeometry(2, 0.24, 0.55);
     const reds = [];
     const whites = [];
-    for (let i = 0; i < pts.length; i += 6) {
+    for (let i = 0; i < pts.length; i += 10) {
       const [nx, nz, hd] = leftNormal(pts, i);
       for (const side of [1, -1]) {
         const rec = {
@@ -302,7 +302,7 @@ export function createScene(canvas) {
           z: pts[i][1] + nz * side * half,
           hd,
         };
-        ((i / 6) % 2 === 0 ? reds : whites).push(rec);
+        ((i / 10) % 2 === 0 ? reds : whites).push(rec);
       }
     }
     const addCurbInst = (list, color) => {
