@@ -26,23 +26,36 @@ export function resampleEven(points, spacing, closed) {
   for (let i = 0; i < seq.length - 1; i++) {
     const d = dist(seq[i], seq[i + 1]);
     if (d > 0) {
-      segs.push({ a: seq[i], b: seq[i + 1], d });
+      segs.push({ a: seq[i], b: seq[i + 1], d, cum: total });
       total += d;
     }
   }
-  const out = [[seq[0][0], seq[0][1]]];
-  let next = spacing;
-  let acc = 0;
-  for (const s of segs) {
-    while (next <= acc + s.d && next < total) {
-      const t = (next - acc) / s.d;
-      out.push([
-        s.a[0] + (s.b[0] - s.a[0]) * t,
-        s.a[1] + (s.b[1] - s.a[1]) * t,
-      ]);
-      next += spacing;
+  if (!segs.length) return [[seq[0][0], seq[0][1]]];
+  if (!closed) {
+    const out = [[seq[0][0], seq[0][1]]];
+    let next = spacing;
+    let acc = 0;
+    for (const s of segs) {
+      while (next <= acc + s.d && next < total) {
+        const t = (next - acc) / s.d;
+        out.push([s.a[0] + (s.b[0] - s.a[0]) * t, s.a[1] + (s.b[1] - s.a[1]) * t]);
+        next += spacing;
+      }
+      acc += s.d;
     }
-    acc += s.d;
+    return out;
+  }
+  // Closed: exact uniform spacing including the final gap back to the start,
+  // so downstream tangent estimates never see a degenerate bunch of samples.
+  const K = Math.max(2, Math.round(total / spacing));
+  const out = [];
+  let si = 0;
+  for (let i = 0; i < K; i++) {
+    const t = (i * total) / K;
+    while (si < segs.length - 1 && segs[si].cum + segs[si].d < t) si++;
+    const s = segs[si];
+    const f = Math.min(1, Math.max(0, (t - s.cum) / s.d));
+    out.push([s.a[0] + (s.b[0] - s.a[0]) * f, s.a[1] + (s.b[1] - s.a[1]) * f]);
   }
   return out;
 }

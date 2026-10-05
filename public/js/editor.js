@@ -241,5 +241,15 @@ export function initEditor({ onRace, store }) {
         ? "Drag dots to fine-tune. Double-click the road to add a point."
         : "Draw a loop with the mouse — then drag the dots to fine-tune.";
     },
+    load(preset) {
+      raw = (preset.points || []).map(([x, y]) => [x, y]);
+      selected = -1;
+      nameEl.value = preset.name || "";
+      widthEl.value = String(preset.width ?? 14);
+      widthV.textContent = widthEl.value;
+      smoothEl.value = String(preset.smoothing ?? 2);
+      smoothV.textContent = smoothEl.value;
+      if (raw.length) hint.textContent = "Loaded preset — drag dots to edit.";
+    },
   };
 }

@@ -30,18 +30,18 @@ test("chaikinClosed 0 iterations is identity", () => {
   assert.deepEqual(chaikinClosed(square, 0), square);
 });
 
-test("resampleEven yields equal spacing", () => {
-  const out = resampleEven(
-    [
-      [0, 0],
-      [10, 0],
-      [10, 10],
-    ],
-    1,
-    true
-  );
-  const d = Math.hypot(out[1][0] - out[0][0], out[1][1] - out[0][1]);
-  assert.ok(Math.abs(d - 1) < 1e-6, `d=${d}`);
+test("resampleEven yields equal spacing including the loop seam", () => {
+  const circle = Array.from({ length: 24 }, (_, i) => [
+    Math.cos((i * Math.PI) / 12) * 10,
+    Math.sin((i * Math.PI) / 12) * 10,
+  ]);
+  const out = resampleEven(circle, 0.5, true);
+  const d = (a, b) => Math.hypot(b[0] - a[0], b[1] - a[1]);
+  const gaps = out.map((p, i) => d(p, out[(i + 1) % out.length]));
+  const mn = Math.min(...gaps);
+  const mx = Math.max(...gaps);
+  assert.ok(mx - mn < 0.02, `gaps vary ${mn}..${mx}`); // seam must not bunch samples
+  assert.ok(Math.abs(gaps[0] - 0.5) < 0.02, `spacing=${gaps[0]}`);
   assert.ok(out.length > 30, `len=${out.length}`);
 });
 

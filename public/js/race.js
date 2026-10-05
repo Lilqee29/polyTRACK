@@ -31,6 +31,7 @@ export function stopRace() {
   if (!current) return;
   const c = current;
   current = null;
+  window.__race = null;
   cancelAnimationFrame(c.raf);
   window.removeEventListener("keydown", c.onKeyDown);
   window.removeEventListener("keyup", c.onKeyUp);
@@ -339,6 +340,7 @@ export function startRace({ preset, mode = "ai", playerName = "You" }) {
       }
     }
 
+    for (const car of cars) scene.moveCar(car.mesh, car.state.x, car.state.z, car.state.heading);
     chaseCamera(scene.camera, player.state, dt);
 
     const order = raceOrder();
@@ -368,6 +370,7 @@ export function startRace({ preset, mode = "ai", playerName = "You" }) {
     onMpFinish,
   };
   current = handle;
+  window.__race = handle;
   hudShow(true);
   handle.raf = requestAnimationFrame(frame);
   return handle;
