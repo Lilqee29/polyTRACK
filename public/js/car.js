@@ -13,6 +13,7 @@ export const CAR_PARAMS = {
   gradeK: 9,
   airGravity: 18,
   landSpeedScale: 0.96,
+  offroadDragK: 2.5,
 };
 
 export function createCarState(x, z, heading) {
@@ -62,7 +63,7 @@ export function stepCar(s, input, dt, track, params = CAR_PARAMS) {
   const brk = input.brake || 0;
   s.v += thr * P.accel * dt;
   if (brk > 0) s.v -= brk * P.brakeForce * Math.sign(s.v) * dt;
-  s.v -= P.drag * s.v * dt * (onRoad ? 1 : 2.5);
+  s.v -= P.drag * s.v * dt * (onRoad ? 1 : P.offroadDragK ?? 2.5);
   if (!s.air && track.G) s.v -= P.gradeK * grade * dt;
   s.v = Math.max(-P.reverseMax, Math.min(s.v, cap));
 

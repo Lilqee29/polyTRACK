@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createAI, aiInput, separateCars } from "../public/js/ai.js";
 import { createCarState } from "../public/js/car.js";
-import { buildSpline, resampleEven } from "../public/js/track.js";
+import { buildSpline, resampleEven, worldFromPreset } from "../public/js/track.js";
 
 const sq = [
   [0, 0],
@@ -61,4 +61,36 @@ test("separateCars is a no-op when far apart", () => {
   separateCars([A, B], 3.2);
   assert.equal(A.x, 0);
   assert.equal(B.x, 50);
+});
+
+test("AI eases off on a steep uphill", () => {
+  const sqPreset = { points: sq, width: 14, smoothing: 2 };
+  const w = worldFromPreset(sqPreset);
+  const flat = worldFromPreset(sqPreset);
+  const n = w.H.length;
+  const cum = w.spline.cum;
+  const idxAt = (m) => {
+    let i = 0;
+    while (i < n - 1 && cum[i + 1] <= m) i++;
+    return i;
+  };
+  const a = idxAt(5);
+  const b = idxAt(60);
+  for (let i = a; i < b; i++) w.G[i] = 0.6;
+  const i0 = idxAt(10); // early on the straight: curvature window stays clean
+  const p0 = w.spline.pts[i0];
+  const p1 = w.spline.pts[(i0 + 1) % n];
+  const heading = Math.atan2(p1[1] - p0[1], p1[0] - p0[0]);
+  const run = (world) => {
+    const ai = createAI(createCarState(p0[0], p0[1], heading), 0.9);
+    ai.hint = i0;
+    ai.state.v = 25;
+    return aiInput(ai, world, 1 / 60, null);
+  };
+  const onFlat = run(flat);
+  const onUphill = run(w);
+  assert.equal(onFlat.brake, 0, "flat at v=30 under target: no brake");
+  assert.ok(onFlat.throttle > 0);
+  assert.ok(onUphill.brake > 0, `uphill must brake, got ${JSON.stringify(onUphill)}`);
+  assert.equal(onUphill.throttle, 0);
 });

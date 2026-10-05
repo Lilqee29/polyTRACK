@@ -1,4 +1,4 @@
-import { progressAt } from "./track.js";
+import { progressAt, gradeAt } from "./track.js";
 
 function wrapAngle(a) {
   return ((a + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
@@ -47,6 +47,12 @@ export function aiInput(ai, track, dt, playerState) {
     const dth = Math.abs(wrapAngle(tangentHeading(spline, b) - tangentHeading(spline, a)));
     const kappa = dth / seg;
     if (kappa > 1e-4) targetSpeed = Math.min(targetSpeed, Math.sqrt(LAT_ACCEL / kappa));
+  }
+
+  // slow for upcoming hills: uphill costs speed
+  if (track.G) {
+    const g = gradeAt(track, prog.i, 10);
+    targetSpeed *= 1 - Math.min(0.6, Math.max(0, g)) * 0.7;
   }
 
   // rubber-band: trailing AI gets a small boost, leading one a small damper

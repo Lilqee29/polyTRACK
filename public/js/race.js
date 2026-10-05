@@ -1,6 +1,14 @@
 import { createScene } from "./scene.js";
-import { worldFromPreset, progressAt, LapTracker, normalAt } from "./track.js";
-import { createCarState, stepCar, keyInput, chaseCamera } from "./car.js";
+import {
+  worldFromPreset,
+  progressAt,
+  LapTracker,
+  normalAt,
+  heightAt,
+  fracAt,
+} from "./track.js";
+import { createCarState, stepCar, keyInput, chaseCamera, CAR_PARAMS } from "./car.js";
+import { normalizePreset } from "./presets.js";
 import { createAI, aiInput, separateCars } from "./ai.js";
 import { hudInit, hudShow, hudUpdate, hudCountdown, hudNote } from "./hud.js";
 
@@ -10,6 +18,11 @@ const AI_SKILLS = [0.95, 0.9, 0.86];
 const COLORS = [0x22c55e, 0xf59e0b, 0x3b82f6, 0xe11d42];
 const CSS_COLORS = ["#22c55e", "#f59e0b", "#3b82f6", "#e11d42"];
 const FROZEN_INPUT = { throttle: 0, brake: 0, steerIn: 0 };
+const THEME_MODS = {
+  summer: { turn: 1, brake: 1, accel: 1, offroadDragK: 2.5 },
+  winter: { turn: 0.85, brake: 0.75, accel: 1, offroadDragK: 3.2 },
+  desert: { turn: 0.95, brake: 1, accel: 0.95, offroadDragK: 4.0 },
+};
 
 let scene = null;
 let current = null;
@@ -49,8 +62,17 @@ export function startRace({ preset, mode = "ai", playerName = "You" }) {
   let mp = mode === "mp" ? window.__mp || null : null;
   if (!mp) mode = "ai";
 
-  const world = worldFromPreset(preset);
-  scene.setTrack(world, String(preset.id ?? preset.name ?? "track"));
+  const np = normalizePreset(preset);
+  const world = worldFromPreset(np);
+  const mod = THEME_MODS[np.theme] || THEME_MODS.summer;
+  const params = {
+    ...CAR_PARAMS,
+    turnRate: CAR_PARAMS.turnRate * mod.turn,
+    brakeForce: CAR_PARAMS.brakeForce * mod.brake,
+    accel: CAR_PARAMS.accel * mod.accel,
+    offroadDragK: mod.offroadDragK,
+  };
+  scene.setTrack(world, String(np.id ?? np.name ?? "track"), np.theme);
   scene.resize();
   const spline = world.spline;
   const L = spline.length;
@@ -75,6 +97,7 @@ export function startRace({ preset, mode = "ai", playerName = "You" }) {
   const addCarEntry = (name, slot, extra) => {
     const sp = slotPos(slot);
     const state = createCarState(sp.x, sp.z, fh);
+    state.y = world.H ? heightAt(world, 0) : 0;
     const tracker = new LapTracker(L);
     tracker.armed = false; // first line crossing starts the lap; only full laps count
     const entry = {
@@ -158,8 +181,12 @@ export function startRace({ preset, mode = "ai", playerName = "You" }) {
   );
 
   // snap chase camera behind the player
-  scene.camera.position.set(player.state.x - fx * 10, 4.8, player.state.z - fz * 10);
-  scene.camera.lookAt(player.state.x + fx * 4, 1.2, player.state.z + fz * 4);
+  scene.camera.position.set(
+    player.state.x - fx * 10,
+    player.state.y + 4.8,
+    player.state.z - fz * 10
+  );
+  scene.camera.lookAt(player.state.x + fx * 4, player.state.y + 1.2, player.state.z + fz * 4);
 
   // countdown: 3s local, or synced to the host's wall clock in multiplayer
   const now0 = performance.now();
@@ -188,6 +215,10 @@ export function startRace({ preset, mode = "ai", playerName = "You" }) {
     player.state.heading = p.heading;
     player.state.v = 0;
     player.state.steer = 0;
+    player.state.air = false;
+    player.state.vy = 0;
+    player.state.airT = 0;
+    player.state.y = world.H ? heightAt(world, p.i) : 0;
     player.hint = p.i;
   }
 
@@ -260,6 +291,11 @@ export function startRace({ preset, mode = "ai", playerName = "You" }) {
     car.state.z = a.z + (b.z - a.z) * f;
     car.state.heading = a.heading + wrapAngle(b.heading - a.heading) * f;
     car.state.v = a.v ?? 0;
+    const pg = progressAt(spline, car.state.x, car.state.z, car.hint);
+    car.hint = pg.i;
+    car.state.y = world.H
+      ? heightAt(world, pg.i, fracAt(spline, pg.i, car.state.x, car.state.z))
+      : 0;
     car.lap = b.lap ?? 0;
     car.prog = b.s ?? car.prog;
     while (buf.length > 30 && buf[1].t < t - 2000) buf.shift();
@@ -289,7 +325,7 @@ export function startRace({ preset, mode = "ai", playerName = "You" }) {
           lap: player.lap,
         });
       }
-      stepCar(car.state, inp, dt, world);
+      stepCar(car.state, inp, dt, world, params);
       if (car.ai) car.ai.lap = car.lap;
     }
     separateCars(
@@ -340,7 +376,9 @@ export function startRace({ preset, mode = "ai", playerName = "You" }) {
       }
     }
 
-    for (const car of cars) scene.moveCar(car.mesh, car.state.x, car.state.z, car.state.heading);
+    for (const car of cars) {
+      scene.moveCar(car.mesh, car.state.x, car.state.z, car.state.heading, car.state.y || 0);
+    }
     chaseCamera(scene.camera, player.state, dt);
 
     const order = raceOrder();
